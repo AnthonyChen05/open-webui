@@ -192,7 +192,8 @@
 						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
 				} catch (e) {}
-			} else {
+			} else if (selectedToolIds.length === 0) {
+				// Only set defaults if no tools were loaded from database
 				await setDefaults();
 			}
 
@@ -235,12 +236,14 @@
 	};
 
 	let oldSelectedModelIds = [''];
+	let isLoadingChat = false; // Flag to prevent resetInput() during chat load
 	$: if (JSON.stringify(selectedModelIds) !== JSON.stringify(oldSelectedModelIds)) {
 		onSelectedModelIdsChange();
 	}
 
 	const onSelectedModelIdsChange = () => {
-		if (oldSelectedModelIds.filter((id) => id).length > 0) {
+		// Only reset input if user manually changed models (not during chat load)
+		if (oldSelectedModelIds.filter((id) => id).length > 0 && !isLoadingChat) {
 			resetInput();
 		}
 		oldSelectedModelIds = selectedModelIds;
@@ -1016,6 +1019,9 @@
 			if (chatContent) {
 				console.log(chatContent);
 
+				// Set flag to prevent resetInput() from firing during model load
+				isLoadingChat = true;
+
 				selectedModels =
 					(chatContent?.models ?? undefined) !== undefined
 						? chatContent.models
@@ -1026,6 +1032,11 @@
 				}
 
 				oldSelectedModelIds = selectedModels;
+
+				// Restore selectedToolIds from database if available
+				if (chatContent?.selectedToolIds) {
+					selectedToolIds = chatContent.selectedToolIds;
+				}
 
 				history =
 					(chatContent?.history ?? undefined) !== undefined
@@ -1066,10 +1077,18 @@
 
 				await tick();
 
+				// Reset loading flag after chat is fully loaded
+				isLoadingChat = false;
+
 				return true;
 			} else {
+				// Reset loading flag if chat content not found
+				isLoadingChat = false;
 				return null;
 			}
+		} else {
+			// Reset loading flag if chat not found
+			isLoadingChat = false;
 		}
 	};
 
@@ -2225,7 +2244,8 @@
 					history: history,
 					messages: createMessagesList(history, history.currentId),
 					params: params,
-					files: chatFiles
+					files: chatFiles,
+					selectedToolIds: selectedToolIds // Persist selectedToolIds to database
 				});
 				currentChatPage.set(1);
 				await chats.set(await getChatList(localStorage.token, $currentChatPage));
