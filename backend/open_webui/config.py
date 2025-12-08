@@ -1050,6 +1050,64 @@ OPENAI_API_CONFIGS = PersistentConfig(
     {},
 )
 
+####################################
+# CLAUDE_API
+####################################
+
+
+ENABLE_CLAUDE_API = PersistentConfig(
+    "ENABLE_CLAUDE_API",
+    "claude.enable",
+    os.environ.get("ENABLE_CLAUDE_API", "False").lower() == "true",
+)
+
+
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "")
+CLAUDE_API_BASE_URL = os.environ.get("CLAUDE_API_BASE_URL", "")
+
+
+if CLAUDE_API_BASE_URL == "":
+    CLAUDE_API_BASE_URL = "https://api.anthropic.com"
+else:
+    if CLAUDE_API_BASE_URL.endswith("/"):
+        CLAUDE_API_BASE_URL = CLAUDE_API_BASE_URL[:-1]
+
+CLAUDE_API_KEYS = os.environ.get("CLAUDE_API_KEYS", "")
+CLAUDE_API_KEYS = CLAUDE_API_KEYS if CLAUDE_API_KEYS != "" else CLAUDE_API_KEY
+
+CLAUDE_API_KEYS = [key.strip() for key in CLAUDE_API_KEYS.split(";")]
+CLAUDE_API_KEYS = PersistentConfig(
+    "CLAUDE_API_KEYS", "claude.api_keys", CLAUDE_API_KEYS
+)
+
+CLAUDE_API_BASE_URLS = os.environ.get("CLAUDE_API_BASE_URLS", "")
+CLAUDE_API_BASE_URLS = (
+    CLAUDE_API_BASE_URLS if CLAUDE_API_BASE_URLS != "" else CLAUDE_API_BASE_URL
+)
+
+CLAUDE_API_BASE_URLS = [
+    url.strip() if url != "" else "https://api.anthropic.com"
+    for url in CLAUDE_API_BASE_URLS.split(";")
+]
+CLAUDE_API_BASE_URLS = PersistentConfig(
+    "CLAUDE_API_BASE_URLS", "claude.api_base_urls", CLAUDE_API_BASE_URLS
+)
+
+CLAUDE_API_CONFIGS = PersistentConfig(
+    "CLAUDE_API_CONFIGS",
+    "claude.api_configs",
+    {},
+)
+
+# Get the actual Claude API key based on the base URL
+CLAUDE_API_KEY = ""
+try:
+    CLAUDE_API_KEY = CLAUDE_API_KEYS.value[
+        CLAUDE_API_BASE_URLS.value.index("https://api.anthropic.com")
+    ]
+except Exception:
+    pass
+
 # Get the actual OpenAI API key based on the base URL
 OPENAI_API_KEY = ""
 try:

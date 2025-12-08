@@ -6,6 +6,7 @@
 
 	import { getOllamaConfig, updateOllamaConfig } from '$lib/apis/ollama';
 	import { getOpenAIConfig, updateOpenAIConfig, getOpenAIModels } from '$lib/apis/openai';
+	import { getClaudeConfig, updateClaudeConfig, getClaudeModels } from '$lib/apis/claude';
 	import { getModels as _getModels, getBackendConfig } from '$lib/apis';
 	import { getConnectionsConfig, setConnectionsConfig } from '$lib/apis/configs';
 
@@ -17,6 +18,7 @@
 	import Plus from '$lib/components/icons/Plus.svelte';
 
 	import OpenAIConnection from './Connections/OpenAIConnection.svelte';
+	import ClaudeConnection from './Connections/ClaudeConnection.svelte';
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
 
@@ -40,13 +42,19 @@
 	let OPENAI_API_BASE_URLS = [''];
 	let OPENAI_API_CONFIGS = {};
 
+	let CLAUDE_API_KEYS = [''];
+	let CLAUDE_API_BASE_URLS = [''];
+	let CLAUDE_API_CONFIGS = {};
+
 	let ENABLE_OPENAI_API: null | boolean = null;
+	let ENABLE_CLAUDE_API: null | boolean = null;
 	let ENABLE_OLLAMA_API: null | boolean = null;
 
 	let connectionsConfig = null;
 
 	let pipelineUrls = {};
 	let showAddOpenAIConnectionModal = false;
+	let showAddClaudeConnectionModal = false;
 	let showAddOllamaConnectionModal = false;
 
 	const updateOpenAIHandler = async () => {
@@ -126,6 +134,51 @@
 		await updateOpenAIHandler();
 	};
 
+	const updateClaudeHandler = async () => {
+		if (ENABLE_CLAUDE_API !== null) {
+			// Remove trailing slashes
+			CLAUDE_API_BASE_URLS = CLAUDE_API_BASE_URLS.map((url) => url.replace(/\/$/, ''));
+
+			// Check if API KEYS length is same than API URLS length
+			if (CLAUDE_API_KEYS.length !== CLAUDE_API_BASE_URLS.length) {
+				// if there are more keys than urls, remove the extra keys
+				if (CLAUDE_API_KEYS.length > CLAUDE_API_BASE_URLS.length) {
+					CLAUDE_API_KEYS = CLAUDE_API_KEYS.slice(0, CLAUDE_API_BASE_URLS.length);
+				}
+
+				// if there are more urls than keys, add empty keys
+				if (CLAUDE_API_KEYS.length < CLAUDE_API_BASE_URLS.length) {
+					const diff = CLAUDE_API_BASE_URLS.length - CLAUDE_API_KEYS.length;
+					for (let i = 0; i < diff; i++) {
+						CLAUDE_API_KEYS.push('');
+					}
+				}
+			}
+
+			const res = await updateClaudeConfig(localStorage.token, {
+				ENABLE_CLAUDE_API: ENABLE_CLAUDE_API,
+				CLAUDE_API_BASE_URLS: CLAUDE_API_BASE_URLS,
+				CLAUDE_API_KEYS: CLAUDE_API_KEYS,
+				CLAUDE_API_CONFIGS: CLAUDE_API_CONFIGS
+			}).catch((error) => {
+				toast.error(`${error}`);
+			});
+
+			if (res) {
+				toast.success($i18n.t('Claude API settings updated'));
+				await models.set(await getModels());
+			}
+		}
+	};
+
+	const addClaudeConnectionHandler = async (connection) => {
+		CLAUDE_API_BASE_URLS = [...CLAUDE_API_BASE_URLS, connection.url];
+		CLAUDE_API_KEYS = [...CLAUDE_API_KEYS, connection.key];
+		CLAUDE_API_CONFIGS[CLAUDE_API_BASE_URLS.length - 1] = connection.config;
+
+		await updateClaudeHandler();
+	};
+
 	const addOllamaConnectionHandler = async (connection) => {
 		OLLAMA_BASE_URLS = [...OLLAMA_BASE_URLS, connection.url];
 		OLLAMA_API_CONFIGS[OLLAMA_BASE_URLS.length - 1] = {
@@ -140,6 +193,7 @@
 		if ($user?.role === 'admin') {
 			let ollamaConfig = {};
 			let openaiConfig = {};
+			let claudeConfig = {};
 
 			await Promise.all([
 				(async () => {
@@ -149,16 +203,24 @@
 					openaiConfig = await getOpenAIConfig(localStorage.token);
 				})(),
 				(async () => {
+					claudeConfig = await getClaudeConfig(localStorage.token);
+				})(),
+				(async () => {
 					connectionsConfig = await getConnectionsConfig(localStorage.token);
 				})()
 			]);
 
 			ENABLE_OPENAI_API = openaiConfig.ENABLE_OPENAI_API;
+			ENABLE_CLAUDE_API = claudeConfig.ENABLE_CLAUDE_API;
 			ENABLE_OLLAMA_API = ollamaConfig.ENABLE_OLLAMA_API;
 
 			OPENAI_API_BASE_URLS = openaiConfig.OPENAI_API_BASE_URLS;
 			OPENAI_API_KEYS = openaiConfig.OPENAI_API_KEYS;
 			OPENAI_API_CONFIGS = openaiConfig.OPENAI_API_CONFIGS;
+
+			CLAUDE_API_BASE_URLS = claudeConfig.CLAUDE_API_BASE_URLS;
+			CLAUDE_API_KEYS = claudeConfig.CLAUDE_API_KEYS;
+			CLAUDE_API_CONFIGS = claudeConfig.CLAUDE_API_CONFIGS;
 
 			OLLAMA_BASE_URLS = ollamaConfig.OLLAMA_BASE_URLS;
 			OLLAMA_API_CONFIGS = ollamaConfig.OLLAMA_API_CONFIGS;
@@ -184,6 +246,27 @@
 				});
 			}
 
+			if (ENABLE_CLAUDE_API) {
+				// get url and idx
+				for (const [idx, url] of CLAUDE_API_BASE_URLS.entries()) {
+					if (!CLAUDE_API_CONFIGS[idx]) {
+						// Legacy support, url as key
+						CLAUDE_API_CONFIGS[idx] = CLAUDE_API_CONFIGS[url] || {};
+					}
+				}
+
+				CLAUDE_API_BASE_URLS.forEach(async (url, idx) => {
+					CLAUDE_API_CONFIGS[idx] = CLAUDE_API_CONFIGS[idx] || {};
+					if (!(CLAUDE_API_CONFIGS[idx]?.enable ?? true)) {
+						return;
+					}
+					const res = await getClaudeModels(localStorage.token, idx);
+					if (res.pipelines) {
+						pipelineUrls[url] = true;
+					}
+				});
+			}
+
 			if (ENABLE_OLLAMA_API) {
 				for (const [idx, url] of OLLAMA_BASE_URLS.entries()) {
 					if (!OLLAMA_API_CONFIGS[idx]) {
@@ -196,6 +279,7 @@
 
 	const submitHandler = async () => {
 		updateOpenAIHandler();
+		updateClaudeHandler();
 		updateOllamaHandler();
 
 		dispatch('save');
@@ -210,6 +294,12 @@
 />
 
 <AddConnectionModal
+	claude
+	bind:show={showAddClaudeConnectionModal}
+	onSubmit={addClaudeConnectionHandler}
+/>
+
+<AddConnectionModal
 	ollama
 	bind:show={showAddOllamaConnectionModal}
 	onSubmit={addOllamaConnectionHandler}
@@ -217,7 +307,7 @@
 
 <form class="flex flex-col h-full justify-between text-sm" on:submit|preventDefault={submitHandler}>
 	<div class=" overflow-y-scroll scrollbar-hidden h-full">
-		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
+		{#if ENABLE_OPENAI_API !== null && ENABLE_CLAUDE_API !== null && ENABLE_OLLAMA_API !== null && connectionsConfig !== null}
 			<div class="mb-3.5">
 				<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
@@ -281,6 +371,73 @@
 												});
 												OPENAI_API_CONFIGS = newConfig;
 												updateOpenAIHandler();
+											}}
+										/>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<div class="my-2">
+					<div class="mt-2 space-y-2">
+						<div class="flex justify-between items-center text-sm">
+							<div class="  font-medium">{$i18n.t('Claude API')}</div>
+
+							<div class="flex items-center">
+								<div class="">
+									<Switch
+										bind:state={ENABLE_CLAUDE_API}
+										on:change={async () => {
+											updateClaudeHandler();
+										}}
+									/>
+								</div>
+							</div>
+						</div>
+
+						{#if ENABLE_CLAUDE_API}
+							<div class="">
+								<div class="flex justify-between items-center">
+									<div class="font-medium text-xs">{$i18n.t('Manage Claude API Connections')}</div>
+
+									<Tooltip content={$i18n.t(`Add Connection`)}>
+										<button
+											class="px-1"
+											on:click={() => {
+												showAddClaudeConnectionModal = true;
+											}}
+											type="button"
+										>
+											<Plus />
+										</button>
+									</Tooltip>
+								</div>
+
+								<div class="flex flex-col gap-1.5 mt-1.5">
+									{#each CLAUDE_API_BASE_URLS as url, idx}
+										<ClaudeConnection
+											bind:url={CLAUDE_API_BASE_URLS[idx]}
+											bind:key={CLAUDE_API_KEYS[idx]}
+											bind:config={CLAUDE_API_CONFIGS[idx]}
+											pipeline={pipelineUrls[url] ? true : false}
+											onSubmit={() => {
+												updateClaudeHandler();
+											}}
+											onDelete={() => {
+												CLAUDE_API_BASE_URLS = CLAUDE_API_BASE_URLS.filter(
+													(url, urlIdx) => idx !== urlIdx
+												);
+												CLAUDE_API_KEYS = CLAUDE_API_KEYS.filter((key, keyIdx) => idx !== keyIdx);
+
+												let newConfig = {};
+												CLAUDE_API_BASE_URLS.forEach((url, newIdx) => {
+													newConfig[newIdx] =
+														CLAUDE_API_CONFIGS[newIdx < idx ? newIdx : newIdx + 1];
+												});
+												CLAUDE_API_CONFIGS = newConfig;
+												updateClaudeHandler();
 											}}
 										/>
 									{/each}

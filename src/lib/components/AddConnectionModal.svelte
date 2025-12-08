@@ -5,6 +5,7 @@
 
 	import { settings } from '$lib/stores';
 	import { verifyOpenAIConnection } from '$lib/apis/openai';
+	import { verifyClaudeConnection } from '$lib/apis/claude';
 	import { verifyOllamaConnection } from '$lib/apis/ollama';
 
 	import Modal from '$lib/components/common/Modal.svelte';
@@ -26,6 +27,7 @@
 	export let edit = false;
 
 	export let ollama = false;
+	export let claude = false;
 	export let direct = false;
 
 	export let connection = null;
@@ -110,9 +112,52 @@
 		}
 	};
 
+	const verifyClaudeHandler = async () => {
+		// remove trailing slash from url
+		url = url.replace(/\/$/, '');
+
+		let _headers = null;
+
+		if (headers) {
+			try {
+				_headers = JSON.parse(headers);
+				if (typeof _headers !== 'object' || Array.isArray(_headers)) {
+					_headers = null;
+					throw new Error('Headers must be a valid JSON object');
+				}
+				headers = JSON.stringify(_headers, null, 2);
+			} catch (error) {
+				toast.error($i18n.t('Headers must be a valid JSON object'));
+				return;
+			}
+		}
+
+		const res = await verifyClaudeConnection(
+			localStorage.token,
+			{
+				url,
+				key,
+				config: {
+					auth_type,
+					api_version: apiVersion,
+					...(_headers ? { headers: _headers } : {})
+				}
+			},
+			direct
+		).catch((error) => {
+			toast.error(`${error}`);
+		});
+
+		if (res) {
+			toast.success($i18n.t('Server connection verified'));
+		}
+	};
+
 	const verifyHandler = () => {
 		if (ollama) {
 			verifyOllamaHandler();
+		} else if (claude) {
+			verifyClaudeHandler();
 		} else {
 			verifyOpenAIHandler();
 		}
