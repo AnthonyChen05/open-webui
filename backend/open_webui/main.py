@@ -120,6 +120,11 @@ from open_webui.config import (
     OPENAI_API_BASE_URLS,
     OPENAI_API_KEYS,
     OPENAI_API_CONFIGS,
+    # Claude
+    ENABLE_CLAUDE_API,
+    CLAUDE_API_BASE_URLS,
+    CLAUDE_API_KEYS,
+    CLAUDE_API_CONFIGS,
     # Direct Connections
     ENABLE_DIRECT_CONNECTIONS,
     # Model list
@@ -675,6 +680,19 @@ app.state.config.OPENAI_API_KEYS = OPENAI_API_KEYS
 app.state.config.OPENAI_API_CONFIGS = OPENAI_API_CONFIGS
 
 app.state.OPENAI_MODELS = {}
+
+########################################
+#
+# CLAUDE
+#
+########################################
+
+app.state.config.ENABLE_CLAUDE_API = ENABLE_CLAUDE_API
+app.state.config.CLAUDE_API_BASE_URLS = CLAUDE_API_BASE_URLS
+app.state.config.CLAUDE_API_KEYS = CLAUDE_API_KEYS
+app.state.config.CLAUDE_API_CONFIGS = CLAUDE_API_CONFIGS
+
+app.state.CLAUDE_MODELS = {}
 
 ########################################
 #
